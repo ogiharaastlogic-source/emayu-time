@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<title>エマーユ接客時間集計</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap">
+<style>
+/* Layout: one column workbench. Tabs on top (入力 / 一覧 / 集計 / 設定); the entry form mirrors the paper slip order so closing staff copy top to bottom. */
+:root {
+  --bg: #f3f4f6;
+  --surface: #ffffff;
+  --fg: #1d2733;
+  --muted: #66717d;
+  --line: #d5dae0;
+  --accent: #2f5d8a;
+  --accent-soft: #e4ecf5;
+  --warn: #b5532b;
+  --warn-soft: #f8e9e2;
+  --ok: #2e7d4f;
+  --font: "BIZ UDPGothic", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #15191e; --surface: #1e242b; --fg: #e3e7ec; --muted: #9aa4af; --line: #343c46;
+  --accent: #8db6e0; --accent-soft: #24364a; --warn: #e39a78; --warn-soft: #3d2a22; --ok: #7fcf9d; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #15191e; --surface: #1e242b; --fg: #e3e7ec; --muted: #9aa4af; --line: #343c46;
+  --accent: #8db6e0; --accent-soft: #24364a; --warn: #e39a78; --warn-soft: #3d2a22; --ok: #7fcf9d; color-scheme: dark }
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 48px; }
+.wrap { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+header h1 { margin: 0; font-size: 21px; text-wrap: balance; }
+header p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+
+nav { display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+nav button { font: inherit; background: none; border: 0; border-bottom: 3px solid transparent; padding: 8px 14px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+nav button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); font-weight: 700; }
+nav button:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 18px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.panel h2 { margin: 0; font-size: 16px; }
+.note { font-size: 13px; color: var(--muted); margin: 0; }
+.status { font-size: 13px; padding: 8px 12px; border-radius: 6px; background: var(--accent-soft); color: var(--fg); }
+.status.err { background: var(--warn-soft); }
+
+.field { display: grid; grid-template-columns: 9em 1fr; gap: 10px; align-items: center; }
+.field > label, .field > .lab { font-weight: 700; font-size: 14px; }
+.field .num { color: var(--accent); margin-right: 4px; }
+@media (max-width: 560px) { .field { grid-template-columns: 1fr; gap: 4px; } }
+input[type=text], input[type=date], input[type=number], input[type=month], select, textarea {
+  font: inherit; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; width: 100%; min-width: 0; }
+textarea { min-height: 64px; resize: vertical; }
+.inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.inline input[type=number] { width: 5.5em; text-align: right; font-variant-numeric: tabular-nums; font-size: 18px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { font: inherit; background: var(--surface); color: var(--fg); border: 0; padding: 7px 16px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--surface); font-weight: 700; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips label { display: inline-flex; gap: 5px; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 3px 11px; font-size: 13px; cursor: pointer; }
+.chips input:checked + span { color: var(--warn); font-weight: 700; }
+.over { font-size: 13px; font-weight: 700; }
+.over.bad { color: var(--warn); } .over.good { color: var(--ok); }
+
+.actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+.btn { font: inherit; font-weight: 700; border-radius: 6px; padding: 9px 20px; cursor: pointer; border: 1px solid var(--accent); background: var(--accent); color: var(--surface); }
+.btn.ghost { background: var(--surface); color: var(--accent); }
+.btn:disabled { opacity: .5; cursor: default; }
+.link { font: inherit; font-size: 13px; background: none; border: 0; color: var(--warn); cursor: pointer; padding: 2px 4px; }
+
+.tablebox { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 7px 9px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+th { font-size: 12px; color: var(--muted); font-weight: 700; letter-spacing: .03em; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+tr.irr td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+.tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--warn-soft); color: var(--warn); font-weight: 700; }
+.memo { white-space: normal; min-width: 12em; color: var(--muted); font-size: 13px; }
+
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+@media (max-width: 640px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+.kpi { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.kpi b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+.kpi span { font-size: 12px; color: var(--muted); }
+.bar { height: 8px; background: var(--accent); border-radius: 2px; min-width: 2px; }
+.empty { color: var(--muted); font-size: 14px; padding: 12px 0; }
+
+/* pickers */
+.picks { display: flex; flex-wrap: wrap; gap: 6px; }
+.picks button { font: inherit; font-size: 14px; min-height: 40px; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+.picks button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--surface); font-weight: 700; }
+.picks:empty { display: none; }
+.stack { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+input, select, textarea { font-size: 16px !important; }
+.short { display: none; }
+
+/* phone */
+@media (max-width: 640px) {
+  body { padding-block: 12px calc(84px + env(safe-area-inset-bottom, 0px)); }
+  header h1 { font-size: 18px; }
+  header p { display: none; }
+  nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--surface); border-top: 1px solid var(--line); border-bottom: 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px); padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); gap: 0; overflow: visible; }
+  nav button { flex: 1; border-bottom: 0; border-top: 3px solid transparent; padding: 12px 4px 14px; font-size: 14px; }
+  nav button[aria-selected="true"] { border-bottom: 0; border-top-color: var(--accent); }
+  .long { display: none; } .short { display: inline; }
+  .panel { padding: 14px; border-radius: 10px; }
+  .field { gap: 6px; }
+  .seg { display: flex; width: 100%; } .seg button { flex: 1; min-height: 46px; font-size: 16px; }
+  .inline input[type=number] { width: 4.5em; min-height: 48px; font-size: 22px !important; }
+  .chips label { padding: 9px 14px; font-size: 14px; }
+  .picks button { min-height: 44px; font-size: 15px; }
+  .actions { position: sticky; bottom: calc(56px + env(safe-area-inset-bottom, 0px)); z-index: 10; background: var(--surface); margin: 0 -14px -14px; padding: 10px 14px; border-top: 1px solid var(--line); border-radius: 0 0 10px 10px; flex-wrap: nowrap; }
+  .actions .btn { flex: 1; min-height: 50px; font-size: 16px; }
+  .actions .btn.ghost { flex: 0 0 auto; }
+  #form-note { display: none; }
+  .head-row { flex-direction: column; align-items: stretch !important; }
+  .head-row .inline { width: 100%; }
+  .head-row input[type=date], .head-row input[type=month] { flex: 1; width: auto !important; }
+  #s-csv { width: 100%; }
+  /* list as cards */
+  #list-table thead { display: none; }
+  #list-table, #list-table tbody { display: block; }
+  #list-table tr { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  #list-table tr.irr { box-shadow: inset 3px 0 0 var(--warn); padding-left: 10px; }
+  #list-table tr.irr td:first-child { box-shadow: none; }
+  #list-table td { border: 0; padding: 0; white-space: normal; }
+  #list-table td.c-date { font-weight: 700; grid-row: 1; grid-column: 1; }
+  #list-table td.c-time { grid-row: 1; grid-column: 2; }
+  #list-table td.c-staff { grid-row: 2; } #list-table td.c-ring { grid-row: 3; }
+  #list-table td.c-guests { grid-row: 4; }
+  #list-table td.memo { grid-row: 5; }
+  #view-sum .head-row .inline { display: grid; grid-template-columns: auto 1fr; gap: 8px; }
+  #view-sum .head-row .inline .sep-t { display: none; }
+  #s-to { grid-column: 2; } #s-csv { grid-column: 1 / -1; }
+  #list-table td.c-time { text-align: right; font-weight: 700; font-size: 16px; }
+  #list-table td.c-staff, #list-table td.c-ring, #list-table td.memo { grid-column: 1 / -1; }
+  #list-table td.c-guests { grid-column: 1; color: var(--muted); font-size: 13px; text-align: left; }
+  #list-table td.c-del { grid-column: 2; grid-row: 4; text-align: right; }
+  .memo { min-width: 0; }
+  .bar-col { display: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>エマーユリング 接客時間集計</h1>
+    <p>締め作業で紙の伝票を見ながら1件ずつ入力します。入力した内容は記録用スプレッドシートに保存され、集計タブで確認できます。</p>
+  </header>
+
+  <nav role="tablist">
+    <button role="tab" id="tab-input" aria-selected="true" data-view="input">入力</button>
+    <button role="tab" id="tab-list" aria-selected="false" data-view="list">一覧</button>
+    <button role="tab" id="tab-sum" aria-selected="false" data-view="sum">集計</button>
+    <button role="tab" id="tab-set" aria-selected="false" data-view="set"><span class="long">スタッフ・リング設定</span><span class="short">設定</span></button>
+  </nav>
+
+  <div id="status" class="status">読み込んでいます…</div>
+  <div id="pass-box" hidden><form class="panel" id="pass-form" autocomplete="off">
+    <h2>パスコード</h2><p class="note" id="pass-msg"></p>
+    <div class="inline"><input type="password" id="pass-in" style="flex:1" aria-label="パスコード"><button class="btn" type="submit">開く</button></div>
+  </form></div>
+
+  <!-- 入力 -->
+  <section class="panel" id="view-input">
+    <h2>伝票を入力</h2>
+    <form id="form" autocomplete="off">
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="field"><label for="f-date">接客日</label><input type="date" id="f-date" required></div>
+        <div class="field"><label for="f-staff"><span class="num">1</span>対応スタッフ</label>
+          <div class="stack"><div class="inline"><select id="f-staff-sel" style="flex:1 1 10em" aria-label="対応スタッフ"></select>
+          <select id="f-staff2-sel" style="flex:1 1 10em" aria-label="サブスタッフ"></select></div>
+          <div class="inline"><input type="text" id="f-staff" placeholder="名前を入力" hidden style="flex:1 1 10em">
+          <input type="text" id="f-staff2" placeholder="サブの名前を入力" hidden style="flex:1 1 10em"></div></div></div>
+        <div class="field"><label for="f-ring"><span class="num">2</span>リングの種類</label>
+          <div class="stack"><div class="picks" id="f-ring-picks"></div>
+          <p class="note" style="margin:0">タップで選択。お二人のリングが違うときは2つ選びます。</p>
+          <div class="inline"><input type="text" id="f-ring" list="dl-ring" placeholder="リング（候補にないときは入力）" style="flex:1 1 10em">
+          <input type="text" id="f-ring2" list="dl-ring" placeholder="2つ目" style="flex:1 1 10em"></div></div></div>
+        <div class="field"><span class="lab"><span class="num">3</span>対応人数</span>
+          <div class="inline"><div class="seg" id="f-guests-seg"><button type="button" data-v="2" aria-pressed="true">2人</button><button type="button" data-v="4" aria-pressed="false">4人</button><button type="button" data-v="other" aria-pressed="false">その他</button></div>
+          <input type="number" id="f-guests" min="1" max="20" value="2" hidden inputmode="numeric" aria-label="人数"></div></div>
+        <div class="field"><span class="lab"><span class="num">4</span>接客時間</span>
+          <div class="inline"><input type="number" id="f-h" min="0" max="12" placeholder="0" inputmode="numeric" aria-label="時間"> 時間
+            <input type="number" id="f-m" min="0" max="59" placeholder="0" inputmode="numeric" aria-label="分"> 分
+            <span class="over" id="f-over"></span></div></div>
+        <div class="field"><label for="f-irr"><span class="num">5</span>イレギュラー</label>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div class="chips" id="f-irr">
+              <label><input type="checkbox" value="人数変更"><span>人数変更</span></label>
+              <label><input type="checkbox" value="遅刻"><span>遅刻</span></label>
+              <label><input type="checkbox" value="延長"><span>延長</span></label>
+              <label><input type="checkbox" value="リング・サイズ変更"><span>リング・サイズ変更</span></label>
+              <label><input type="checkbox" value="接客の中断"><span>接客の中断</span></label>
+              <label><input type="checkbox" value="やり直し"><span>やり直し</span></label>
+              <label><input type="checkbox" value="同伴者あり"><span>同伴者あり</span></label>
+              <label><input type="checkbox" value="その他"><span>その他</span></label>
+            </div>
+            <textarea id="f-memo" placeholder="伝票のメモ（何があったか、何分かかったか）"></textarea>
+          </div></div>
+        <div class="actions"><button type="reset" class="btn ghost">クリア</button><button type="submit" class="btn" id="f-save">保存して次へ</button></div>
+      </div>
+    </form>
+    <p class="note" id="form-note">保存すると日付とスタッフはそのまま残り、ほかの欄が空になります。続けて次の伝票を入力できます。</p>
+  </section>
+
+  <!-- 一覧 -->
+  <section class="panel" id="view-list" hidden>
+    <div class="inline head-row" style="justify-content:space-between"><h2>入力済みの伝票</h2>
+      <div class="inline"><label for="l-month" class="note">月</label><input type="month" id="l-month" style="width:auto"></div></div>
+    <div class="tablebox"><table id="list-table"></table></div>
+  </section>
+
+  <!-- 集計 -->
+  <section class="panel" id="view-sum" hidden>
+    <div class="inline head-row" style="justify-content:space-between"><h2>集計</h2>
+      <div class="inline"><label for="s-from" class="note">期間</label><input type="date" id="s-from" style="width:auto"><span class="sep-t">〜</span><input type="date" id="s-to" style="width:auto" aria-label="期間の終わり">
+      <button type="button" class="btn ghost" id="s-csv">CSVで保存</button></div></div>
+    <div class="kpis" id="kpis"></div>
+    <div id="sum-tables" style="display:flex;flex-direction:column;gap:18px"></div>
+  </section>
+
+  <!-- 設定 -->
+  <section class="panel" id="view-set" hidden>
+    <h2>スタッフ・リングの選択肢</h2>
+    <p class="note">1行に1つずつ入力します。ここに入れた名前が入力画面の候補に出ます（候補にない名前も手入力できます）。</p>
+    <div class="field" style="align-items:start"><label for="m-staff">スタッフ<br><span class="note">表参道店</span></label><textarea id="m-staff" rows="8" placeholder="例）山田&#10;佐藤"></textarea></div>
+    <div class="field" style="align-items:start"><label for="m-ring">リングの種類<br><span class="note">原型台帳より</span></label><textarea id="m-ring" rows="8" placeholder="原型名を1行に1つ"></textarea></div>
+    <div class="actions"><button type="button" class="btn" id="m-save">選択肢を保存</button></div>
+  </section>
+
+  <datalist id="dl-staff"></datalist>
+  <datalist id="dl-ring"></datalist>
+</div>
+
+<script>
+const STD_MIN = 180;
+const $ = (id) => document.getElementById(id);
+let db = null, records = [], master = { staff: [], rings: [] };
+
+/* ===== 保存先（Google Apps Script）=====
+   下の API_URL に、記録用スプレッドシートの Apps Script を「ウェブアプリ」として公開したURLを貼ります。 */
+const API_URL = 'https://script.google.com/macros/s/AKfycbz1Zjoet0B1jmMF4W-qBMM_wlOeSLDM1huHRqPGqbkZrPxDgJtg4eXaaVSmN2xHHp604w/exec';
+const PASS_KEY = 'emayu-pass';
+function getPass() { try { return localStorage.getItem(PASS_KEY) || ''; } catch (e) { return ''; } }
+function setPass(v) { try { localStorage.setItem(PASS_KEY, v); } catch (e) {} }
+async function api(payload) {
+  const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ ...payload, pass: getPass() }) });
+  const j = await res.json();
+  if (!j.ok) { if (j.error === 'passcode') showPass(true); throw { code: j.error === 'passcode' ? 'パスコードが違います' : j.error }; }
+  applyData(j); return j;
+}
+function applyData(j) {
+  records = (j.records || []).filter(r => r.date && typeof r.minutes === 'number');
+  const m = j.master || {};
+  master = { staff: Array.isArray(m.staff) ? m.staff : [], rings: Array.isArray(m.rings) ? m.rings : [] };
+  if (document.activeElement !== $('m-staff')) $('m-staff').value = master.staff.join('\n');
+  if (document.activeElement !== $('m-ring')) $('m-ring').value = master.rings.join('\n');
+  render();
+}
+function showPass(wrong) {
+  $('pass-box').hidden = false;
+  $('pass-msg').textContent = wrong ? 'パスコードが違います。もう一度入力してください。' : '店舗のパスコードを入力してください（最初の1回だけ）。';
+  $('pass-in').focus();
+}
+async function refresh() {
+  if (!API_URL || !getPass()) return;
+  try { await api({ action: 'list' }); db = true; setStatus(''); }
+  catch (err) { setStatus('データを読み込めませんでした（' + (err.code || err.message || err) + '）。通信状態を確認してください。', true); }
+}
+
+const pad = (n) => String(n).padStart(2, '0');
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
+const hm = (min) => { min = Math.round(min || 0); return `${Math.floor(min/60)}:${pad(min%60)}`; };
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function setStatus(msg, err) { const s = $('status'); s.textContent = msg; s.className = 'status' + (err ? ' err' : ''); s.hidden = !msg; }
+
+/* tabs */
+const views = ['input','list','sum','set'];
+function show(v) {
+  if (!views.includes(v)) v = 'input';
+  views.forEach(x => { $('view-'+x).hidden = x !== v; document.querySelector(`[data-view="${x}"]`).setAttribute('aria-selected', x === v); });
+  render();
+}
+document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => { location.hash = b.dataset.view; }));
+window.addEventListener('hashchange', () => show(location.hash.slice(1)));
+
+/* form */
+let guestsMode = '2';
+$('f-guests-seg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  guestsMode = b.dataset.v;
+  $('f-guests-seg').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  $('f-guests').hidden = guestsMode !== 'other';
+  if (guestsMode !== 'other') $('f-guests').value = guestsMode; else { $('f-guests').value = ''; $('f-guests').focus(); }
+});
+function formMinutes() { const h = +$('f-h').value || 0, m = +$('f-m').value || 0; return h*60 + m; }
+function updateOver() {
+  const t = formMinutes(), o = $('f-over');
+  if (!$('f-h').value && !$('f-m').value) { o.textContent = ''; return; }
+  const d = t - STD_MIN;
+  o.textContent = d > 0 ? `3時間を${d}分超過` : d === 0 ? 'ちょうど3時間' : `3時間より${-d}分短い`;
+  o.className = 'over ' + (d > 0 ? 'bad' : 'good');
+}
+$('f-h').addEventListener('input', updateOver); $('f-m').addEventListener('input', updateOver);
+$('form').addEventListener('reset', () => setTimeout(() => { $('f-date').value = today(); resetGuests(); updateOver(); fillStaff('f-staff-sel','f-staff','対応スタッフを選ぶ'); fillStaff('f-staff2-sel','f-staff2','サブなし'); renderRingPicks(); }));
+function resetGuests() { guestsMode = '2'; $('f-guests').value = 2; $('f-guests').hidden = true; $('f-guests-seg').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x.dataset.v === '2')); }
+
+$('form').addEventListener('submit', async e => {
+  e.preventDefault();
+  if (!db) { setStatus('保存先に接続できていないため保存できません。ページを開き直してください。', true); return; }
+  const minutes = formMinutes(), guests = parseInt($('f-guests').value, 10);
+  if (!$('f-staff').value.trim()) { setStatus('対応スタッフを選んでください。', true); $('f-staff-sel').focus(); window.scrollTo(0,0); return; }
+  if (!$('f-ring').value.trim()) { setStatus('リングの種類を選んでください。', true); window.scrollTo(0,0); return; }
+  if (minutes <= 0) { setStatus('接客時間を入力してください（ストップウォッチの時間）。', true); $('f-h').focus(); return; }
+  if (!guests || guests < 1) { setStatus('対応人数を入力してください。', true); $('f-guests').focus(); return; }
+  const irr = [...$('f-irr').querySelectorAll('input:checked')].map(i => i.value);
+  const rec = {
+    date: $('f-date').value, staff: $('f-staff').value.trim(), staff2: $('f-staff2').value.trim(),
+    ring: $('f-ring').value.trim(), ring2: $('f-ring2').value.trim(), guests, minutes,
+    irregular: irr.length > 0 || !!$('f-memo').value.trim(), irrTypes: irr, memo: $('f-memo').value.trim(),
+    createdAt: new Date().toISOString()
+  };
+  $('f-save').disabled = true;
+  try {
+    await api({ action: 'add', record: rec });
+    setStatus(`保存しました：${rec.date} ${rec.staff} ${hm(rec.minutes)}`);
+    ['f-ring','f-ring2','f-h','f-m','f-memo'].forEach(id => $(id).value = '');
+    $('f-irr').querySelectorAll('input').forEach(i => i.checked = false);
+    resetGuests(); updateOver(); renderRingPicks(); window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch (err) {
+    setStatus('保存できませんでした（' + (err.code || err.message || err) + '）。編集できる権限があるか確認してください。', true);
+  } finally { $('f-save').disabled = false; }
+});
+
+/* staff selects */
+const OTHER = '__other';
+function fillStaff(selId, inpId, first) {
+  const sel = $(selId), keep = sel.value, inp = $(inpId);
+  sel.innerHTML = `<option value="">${first}</option>` + master.staff.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('') + `<option value="${OTHER}">候補にない名前を入力…</option>`;
+  if (keep && [...sel.options].some(o => o.value === keep)) sel.value = keep;
+  else if (inp.value && !master.staff.includes(inp.value)) sel.value = OTHER;
+  else if (inp.value) sel.value = inp.value;
+  inp.hidden = sel.value !== OTHER;
+}
+[['f-staff-sel','f-staff'],['f-staff2-sel','f-staff2']].forEach(([s,i]) => $(s).addEventListener('change', () => {
+  const v = $(s).value; $(i).hidden = v !== OTHER;
+  if (v === OTHER) { $(i).value = ''; $(i).focus(); } else $(i).value = v;
+}));
+/* ring picks */
+function renderRingPicks() {
+  const a = $('f-ring').value.trim(), b = $('f-ring2').value.trim();
+  $('f-ring-picks').innerHTML = master.rings.map(r => `<button type="button" data-ring="${esc(r)}" aria-pressed="${r === a || r === b}">${esc(r)}</button>`).join('');
+}
+$('f-ring-picks').addEventListener('click', e => {
+  const btn = e.target.closest('[data-ring]'); if (!btn) return;
+  const r = btn.dataset.ring, a = $('f-ring'), b = $('f-ring2');
+  if (a.value === r) { a.value = b.value; b.value = ''; }
+  else if (b.value === r) b.value = '';
+  else if (!a.value) a.value = r;
+  else b.value = r;
+  renderRingPicks();
+});
+['f-ring','f-ring2'].forEach(id => $(id).addEventListener('input', renderRingPicks));
+
+/* render */
+function inRange(r, from, to) { return (!from || r.date >= from) && (!to || r.date <= to); }
+function render() {
+  $('dl-staff').innerHTML = master.staff.map(s => `<option value="${esc(s)}">`).join('');
+  $('dl-ring').innerHTML = master.rings.map(s => `<option value="${esc(s)}">`).join('');
+  fillStaff('f-staff-sel', 'f-staff', '対応スタッフを選ぶ'); fillStaff('f-staff2-sel', 'f-staff2', 'サブなし');
+  renderRingPicks();
+  if (!$('view-list').hidden) renderList();
+  if (!$('view-sum').hidden) renderSum();
+}
+function ringText(r) { return [r.ring, r.ring2].filter(Boolean).join(' / '); }
+function staffText(r) { return [r.staff, r.staff2].filter(Boolean).join('・'); }
+
+function renderList() {
+  const m = $('l-month').value;
+  const rows = records.filter(r => !m || (r.date || '').startsWith(m)).sort((a,b) => (b.date+b.createdAt).localeCompare(a.date+a.createdAt));
+  const t = $('list-table');
+  if (!rows.length) { t.innerHTML = `<tr><td class="empty">この月の伝票はまだありません。入力タブから1件目を入力してください。</td></tr>`; return; }
+  t.innerHTML = `<thead><tr><th>接客日</th><th>スタッフ</th><th>リング</th><th class="n">人数</th><th class="n">時間</th><th>イレギュラー</th><th></th></tr></thead><tbody>` +
+    rows.map(r => `<tr class="${r.irregular ? 'irr' : ''}"><td class="c-date">${esc(r.date)}</td><td class="c-staff">${esc(staffText(r))}</td><td class="c-ring">${esc(ringText(r))}</td>
+      <td class="n c-guests">${r.guests}人</td><td class="n c-time">${hm(r.minutes)}${r.minutes > STD_MIN ? ' <span class="tag">超過</span>' : ''}</td>
+      <td class="memo">${(r.irrTypes||[]).map(x => `<span class="tag">${esc(x)}</span>`).join(' ')} ${esc(r.memo)}</td>
+      <td class="c-del"><button class="link" data-del="${esc(r.id)}" type="button">削除</button></td></tr>`).join('') + '</tbody>';
+}
+$('list-table').addEventListener('click', async e => {
+  const b = e.target.closest('[data-del]'); if (!b) return;
+  if (b.dataset.confirm !== '1') { b.dataset.confirm = '1'; b.textContent = 'もう一度押すと削除'; return; }
+  try { await api({ action: 'delete', id: b.dataset.del }); setStatus('1件削除しました。'); }
+  catch (err) { setStatus('削除できませんでした（' + (err.code || err.message) + '）。', true); }
+});
+$('l-month').addEventListener('change', renderList);
+
+function group(rows, keyFn) {
+  const g = new Map();
+  rows.forEach(r => (keyFn(r)).forEach(k => {
+    if (!k) k = '（未入力）';
+    const o = g.get(k) || { n: 0, min: 0, guests: 0, over: 0, irr: 0 };
+    o.n++; o.min += r.minutes; o.guests += r.guests; if (r.minutes > STD_MIN) o.over++; if (r.irregular) o.irr++;
+    g.set(k, o);
+  }));
+  return [...g.entries()].sort((a,b) => b[1].min - a[1].min);
+}
+function sumTable(title, entries, note) {
+  if (!entries.length) return '';
+  const maxMin = Math.max(...entries.map(e => e[1].min));
+  return `<div><h2 style="font-size:15px;margin:0 0 6px">${title}</h2>${note ? `<p class="note">${note}</p>` : ''}<div class="tablebox"><table>
+    <thead><tr><th></th><th class="n">件数</th><th class="n">合計時間</th><th class="n">平均時間</th><th class="n">平均人数</th><th class="n">3時間超過</th><th class="n">イレギュラー</th><th class="bar-col" style="width:30%"></th></tr></thead><tbody>` +
+    entries.map(([k,o]) => `<tr><td>${esc(k)}</td><td class="n">${o.n}</td><td class="n">${hm(o.min)}</td><td class="n">${hm(o.min/o.n)}</td>
+      <td class="n">${(o.guests/o.n).toFixed(1)}</td><td class="n">${o.over}</td><td class="n">${o.irr}</td>
+      <td class="bar-col"><div class="bar" style="width:${(o.min/maxMin*100).toFixed(1)}%"></div></td></tr>`).join('') + '</tbody></table></div></div>';
+}
+function periodRows() { return records.filter(r => inRange(r, $('s-from').value, $('s-to').value)); }
+function renderSum() {
+  const rows = periodRows();
+  const total = rows.reduce((s,r) => s + r.minutes, 0);
+  const over = rows.filter(r => r.minutes > STD_MIN).length;
+  const irr = rows.filter(r => r.irregular).length;
+  $('kpis').innerHTML = [
+    [rows.length + '件', '接客数'], [hm(total), '接客時間の合計'],
+    [rows.length ? hm(total/rows.length) : '-', '1件あたり平均（基準 3:00）'],
+    [`${over}件 / ${irr}件`, '3時間超過 / イレギュラー']
+  ].map(([v,l]) => `<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('');
+  if (!rows.length) { $('sum-tables').innerHTML = '<p class="empty">この期間の伝票はまだありません。</p>'; return; }
+  $('sum-tables').innerHTML =
+    sumTable('スタッフ別', group(rows, r => [r.staff, r.staff2].filter(Boolean)), 'サブで入った回も、その人の件数・時間に含めています。') +
+    sumTable('リングの種類別', group(rows, r => [...new Set([r.ring, r.ring2].filter(Boolean))].length ? [...new Set([r.ring, r.ring2].filter(Boolean))] : [''])) +
+    sumTable('対応人数別', group(rows, r => [r.guests + '人'])) +
+    sumTable('イレギュラーの有無', group(rows, r => [r.irregular ? 'あり' : 'なし'])) +
+    sumTable('イレギュラーの内容', group(rows.filter(r => (r.irrTypes||[]).length), r => r.irrTypes));
+}
+['s-from','s-to'].forEach(id => $(id).addEventListener('change', renderSum));
+
+$('s-csv').addEventListener('click', async () => {
+  const rows = periodRows().sort((a,b) => a.date.localeCompare(b.date));
+  const head = ['接客日','対応スタッフ','サブスタッフ','リング1','リング2','対応人数','接客時間(分)','接客時間(時:分)','3時間超過','イレギュラー','イレギュラー内容','メモ'];
+  const q = (v) => `"${String(v ?? '').replace(/"/g,'""')}"`;
+  const csv = '﻿' + [head, ...rows.map(r => [r.date, r.staff, r.staff2, r.ring, r.ring2, r.guests, r.minutes, hm(r.minutes), r.minutes > STD_MIN ? '超過' : '', r.irregular ? 'あり' : '', (r.irrTypes||[]).join('、'), r.memo])].map(a => a.map(q).join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = `接客時間_${$('s-from').value || '全期間'}_${$('s-to').value || ''}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+});
+
+/* master lists */
+$('m-save').addEventListener('click', async () => {
+  const lines = (id) => [...new Set($(id).value.split('\n').map(s => s.trim()).filter(Boolean))];
+  try { await api({ action: 'setMaster', staff: lines('m-staff'), rings: lines('m-ring') }); setStatus('選択肢を保存しました。'); }
+  catch (err) { setStatus('保存できませんでした（' + (err.code || err.message) + '）。', true); }
+});
+
+/* boot */
+(function init() {
+  $('f-date').value = today();
+  const d = new Date();
+  $('l-month').value = `${d.getFullYear()}-${pad(d.getMonth()+1)}`;
+  $('s-from').value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-01`;
+  $('s-to').value = today();
+  show(location.hash.slice(1) || 'input');
+  $('pass-form').addEventListener('submit', async e => {
+    e.preventDefault(); setPass($('pass-in').value.trim()); $('pass-box').hidden = true; setStatus('読み込んでいます…'); await refresh();
+  });
+  if (!API_URL) { setStatus('保存先（Apps ScriptのURL）がまだ設定されていません。', true); return; }
+  if (!getPass()) { setStatus(''); showPass(false); } else { setStatus('読み込んでいます…'); refresh(); }
+  setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 60000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
+})();
+</script>
+</body>
+</html>
