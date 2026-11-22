@@ -98,6 +98,15 @@ tr.irr td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 input, select, textarea { font-size: 16px !important; }
 .short { display: none; }
 
+/* ring slots */
+.slot { display: grid; grid-template-columns: 5.5em 1fr; gap: 8px; align-items: center; }
+.slot .who { font-size: 13px; color: var(--muted); }
+.slot .stack { gap: 6px; }
+select { min-height: 44px; }
+input[type=date], input[type=month] { -webkit-appearance: none; appearance: none; min-height: 44px; display: block; text-align: left; }
+input::-webkit-date-and-time-value { text-align: left; }
+.saving { opacity: .6; pointer-events: none; }
+
 /* phone */
 @media (max-width: 640px) {
   body { padding-block: 12px calc(84px + env(safe-area-inset-bottom, 0px)); }
@@ -114,7 +123,7 @@ input, select, textarea { font-size: 16px !important; }
   .inline input[type=number] { width: 4.5em; min-height: 48px; font-size: 22px !important; }
   .chips label { padding: 9px 14px; font-size: 14px; }
   .picks button { min-height: 44px; font-size: 15px; }
-  .actions { position: sticky; bottom: calc(56px + env(safe-area-inset-bottom, 0px)); z-index: 10; background: var(--surface); margin: 0 -14px -14px; padding: 10px 14px; border-top: 1px solid var(--line); border-radius: 0 0 10px 10px; flex-wrap: nowrap; }
+  .actions { position: -webkit-sticky; position: sticky; bottom: calc(56px + env(safe-area-inset-bottom, 0px)); z-index: 10; background: var(--surface); margin: 0 -14px -14px; padding: 10px 14px; border-top: 1px solid var(--line); border-radius: 0 0 10px 10px; flex-wrap: nowrap; }
   .actions .btn { flex: 1; min-height: 50px; font-size: 16px; }
   .actions .btn.ghost { flex: 0 0 auto; }
   #form-note { display: none; }
@@ -143,6 +152,9 @@ input, select, textarea { font-size: 16px !important; }
   #list-table td.c-del { grid-column: 2; grid-row: 4; text-align: right; }
   .memo { min-width: 0; }
   .bar-col { display: none; }
+  body.typing nav { display: none; }
+  body.typing .actions { bottom: 0; }
+  .slot { grid-template-columns: 4.5em 1fr; }
 }
 </style>
 </head>
@@ -178,14 +190,12 @@ input, select, textarea { font-size: 16px !important; }
           <select id="f-staff2-sel" style="flex:1 1 10em" aria-label="サブスタッフ"></select></div>
           <div class="inline"><input type="text" id="f-staff" placeholder="名前を入力" hidden style="flex:1 1 10em">
           <input type="text" id="f-staff2" placeholder="サブの名前を入力" hidden style="flex:1 1 10em"></div></div></div>
-        <div class="field"><label for="f-ring"><span class="num">2</span>リングの種類</label>
-          <div class="stack"><div class="picks" id="f-ring-picks"></div>
-          <p class="note" style="margin:0">タップで選択。お二人のリングが違うときは2つ選びます。</p>
-          <div class="inline"><input type="text" id="f-ring" list="dl-ring" placeholder="リング（候補にないときは入力）" style="flex:1 1 10em">
-          <input type="text" id="f-ring2" list="dl-ring" placeholder="2つ目" style="flex:1 1 10em"></div></div></div>
-        <div class="field"><span class="lab"><span class="num">3</span>対応人数</span>
+        <div class="field"><span class="lab"><span class="num">2</span>対応人数</span>
           <div class="inline"><div class="seg" id="f-guests-seg"><button type="button" data-v="2" aria-pressed="true">2人</button><button type="button" data-v="4" aria-pressed="false">4人</button><button type="button" data-v="other" aria-pressed="false">その他</button></div>
-          <input type="number" id="f-guests" min="1" max="20" value="2" hidden inputmode="numeric" aria-label="人数"></div></div>
+          <span class="inline" id="f-guests-wrap" hidden><input type="number" id="f-guests" min="1" max="12" value="2" inputmode="numeric" aria-label="人数"> 人</span></div></div>
+        <div class="field" style="align-items:start"><span class="lab"><span class="num">3</span>リングの種類</span>
+          <div class="stack"><div class="stack" id="f-rings"></div>
+          <p class="note" style="margin:0">人数分の欄が出ます。1人目を選ぶと、空いている欄にも同じリングが入ります。</p></div></div>
         <div class="field"><span class="lab"><span class="num">4</span>接客時間</span>
           <div class="inline"><input type="number" id="f-h" min="0" max="12" placeholder="0" inputmode="numeric" aria-label="時間"> 時間
             <input type="number" id="f-m" min="0" max="59" placeholder="0" inputmode="numeric" aria-label="分"> 分
@@ -297,9 +307,12 @@ $('f-guests-seg').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   guestsMode = b.dataset.v;
   $('f-guests-seg').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
-  $('f-guests').hidden = guestsMode !== 'other';
-  if (guestsMode !== 'other') $('f-guests').value = guestsMode; else { $('f-guests').value = ''; $('f-guests').focus(); }
+  $('f-guests-wrap').hidden = guestsMode !== 'other';
+  if (guestsMode !== 'other') $('f-guests').value = guestsMode; else { $('f-guests').value = '3'; $('f-guests').focus(); }
+  renderRingSlots();
 });
+$('f-guests').addEventListener('input', renderRingSlots);
+function guestCount() { const n = parseInt($('f-guests').value, 10); return Math.max(1, Math.min(12, n || 1)); }
 function formMinutes() { const h = +$('f-h').value || 0, m = +$('f-m').value || 0; return h*60 + m; }
 function updateOver() {
   const t = formMinutes(), o = $('f-over');
@@ -309,34 +322,35 @@ function updateOver() {
   o.className = 'over ' + (d > 0 ? 'bad' : 'good');
 }
 $('f-h').addEventListener('input', updateOver); $('f-m').addEventListener('input', updateOver);
-$('form').addEventListener('reset', () => setTimeout(() => { $('f-date').value = today(); resetGuests(); updateOver(); fillStaff('f-staff-sel','f-staff','対応スタッフを選ぶ'); fillStaff('f-staff2-sel','f-staff2','サブなし'); renderRingPicks(); }));
-function resetGuests() { guestsMode = '2'; $('f-guests').value = 2; $('f-guests').hidden = true; $('f-guests-seg').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x.dataset.v === '2')); }
+$('form').addEventListener('reset', () => setTimeout(() => { $('f-date').value = today(); resetGuests(); updateOver(); fillStaff('f-staff-sel','f-staff','対応スタッフを選ぶ'); fillStaff('f-staff2-sel','f-staff2','サブなし'); clearRings(); }));
+function resetGuests() { guestsMode = '2'; $('f-guests').value = 2; $('f-guests-wrap').hidden = true; $('f-guests-seg').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x.dataset.v === '2')); }
 
 $('form').addEventListener('submit', async e => {
   e.preventDefault();
   if (!db) { setStatus('保存先に接続できていないため保存できません。ページを開き直してください。', true); return; }
   const minutes = formMinutes(), guests = parseInt($('f-guests').value, 10);
   if (!$('f-staff').value.trim()) { setStatus('対応スタッフを選んでください。', true); $('f-staff-sel').focus(); window.scrollTo(0,0); return; }
-  if (!$('f-ring').value.trim()) { setStatus('リングの種類を選んでください。', true); window.scrollTo(0,0); return; }
+  const rings = ringValues();
+  if (rings.some(v => !v)) { setStatus('リングの種類を人数分選んでください。', true); $('f-rings').scrollIntoView({ block: 'center' }); return; }
   if (minutes <= 0) { setStatus('接客時間を入力してください（ストップウォッチの時間）。', true); $('f-h').focus(); return; }
   if (!guests || guests < 1) { setStatus('対応人数を入力してください。', true); $('f-guests').focus(); return; }
   const irr = [...$('f-irr').querySelectorAll('input:checked')].map(i => i.value);
   const rec = {
     date: $('f-date').value, staff: $('f-staff').value.trim(), staff2: $('f-staff2').value.trim(),
-    ring: $('f-ring').value.trim(), ring2: $('f-ring2').value.trim(), guests, minutes,
+    ring: rings[0], ring2: rings.slice(1).join('、'), guests, minutes,
     irregular: irr.length > 0 || !!$('f-memo').value.trim(), irrTypes: irr, memo: $('f-memo').value.trim(),
     createdAt: new Date().toISOString()
   };
-  $('f-save').disabled = true;
+  $('f-save').disabled = true; $('f-save').textContent = '保存中…'; setStatus('保存しています…');
   try {
     await api({ action: 'add', record: rec });
     setStatus(`保存しました：${rec.date} ${rec.staff} ${hm(rec.minutes)}`);
-    ['f-ring','f-ring2','f-h','f-m','f-memo'].forEach(id => $(id).value = '');
+    ['f-h','f-m','f-memo'].forEach(id => $(id).value = '');
     $('f-irr').querySelectorAll('input').forEach(i => i.checked = false);
-    resetGuests(); updateOver(); renderRingPicks(); window.scrollTo({ top: 0, behavior: 'smooth' });
+    resetGuests(); clearRings(); updateOver(); window.scrollTo({ top: 0, behavior: 'smooth' });
   } catch (err) {
     setStatus('保存できませんでした（' + (err.code || err.message || err) + '）。編集できる権限があるか確認してください。', true);
-  } finally { $('f-save').disabled = false; }
+  } finally { $('f-save').disabled = false; $('f-save').textContent = '保存して次へ'; }
 });
 
 /* staff selects */
@@ -353,33 +367,52 @@ function fillStaff(selId, inpId, first) {
   const v = $(s).value; $(i).hidden = v !== OTHER;
   if (v === OTHER) { $(i).value = ''; $(i).focus(); } else $(i).value = v;
 }));
-/* ring picks */
-function renderRingPicks() {
-  const a = $('f-ring').value.trim(), b = $('f-ring2').value.trim();
-  $('f-ring-picks').innerHTML = master.rings.map(r => `<button type="button" data-ring="${esc(r)}" aria-pressed="${r === a || r === b}">${esc(r)}</button>`).join('');
+/* ring slots: one per guest */
+let ringState = [];
+function ringValues() { return ringState.slice(0, guestCount()).map(v => (v || '').trim()); }
+function clearRings() { ringState = []; renderRingSlots(); }
+function ringOptions(val) {
+  const known = master.rings.includes(val);
+  return `<option value="">リングを選ぶ</option>` + master.rings.map(r => `<option value="${esc(r)}"${r === val ? ' selected' : ''}>${esc(r)}</option>`).join('') +
+    `<option value="${OTHER}"${val && !known ? ' selected' : ''}>候補にないリングを入力…</option>`;
 }
-$('f-ring-picks').addEventListener('click', e => {
-  const btn = e.target.closest('[data-ring]'); if (!btn) return;
-  const r = btn.dataset.ring, a = $('f-ring'), b = $('f-ring2');
-  if (a.value === r) { a.value = b.value; b.value = ''; }
-  else if (b.value === r) b.value = '';
-  else if (!a.value) a.value = r;
-  else b.value = r;
-  renderRingPicks();
+function renderRingSlots() {
+  const n = guestCount(), box = $('f-rings');
+  box.innerHTML = Array.from({ length: n }, (_, i) => {
+    const v = ringState[i] || '', other = v && !master.rings.includes(v);
+    return `<div class="slot"><span class="who">お客様${i + 1}</span><div class="stack">
+      <select data-slot="${i}" aria-label="お客様${i + 1}のリング">${ringOptions(v)}</select>
+      <input type="text" data-slot-text="${i}" placeholder="リング名を入力" value="${other ? esc(v) : ''}"${other ? '' : ' hidden'}></div></div>`;
+  }).join('');
+}
+$('f-rings').addEventListener('change', e => {
+  const sel = e.target.closest('select[data-slot]'); if (!sel) return;
+  const i = +sel.dataset.slot, txt = $('f-rings').querySelector(`[data-slot-text="${i}"]`);
+  if (sel.value === OTHER) { txt.hidden = false; txt.value = ''; ringState[i] = ''; txt.focus(); return; }
+  txt.hidden = true; ringState[i] = sel.value;
+  if (i === 0 && sel.value) { for (let k = 1; k < guestCount(); k++) if (!ringState[k]) ringState[k] = sel.value; renderRingSlots(); }
 });
-['f-ring','f-ring2'].forEach(id => $(id).addEventListener('input', renderRingPicks));
+$('f-rings').addEventListener('input', e => {
+  const t = e.target.closest('[data-slot-text]'); if (t) ringState[+t.dataset.slotText] = t.value;
+});
 
 /* render */
 function inRange(r, from, to) { return (!from || r.date >= from) && (!to || r.date <= to); }
+let lastMasterKey = '';
 function render() {
   $('dl-staff').innerHTML = master.staff.map(s => `<option value="${esc(s)}">`).join('');
   $('dl-ring').innerHTML = master.rings.map(s => `<option value="${esc(s)}">`).join('');
-  fillStaff('f-staff-sel', 'f-staff', '対応スタッフを選ぶ'); fillStaff('f-staff2-sel', 'f-staff2', 'サブなし');
-  renderRingPicks();
+  const key = JSON.stringify(master);
+  if (key !== lastMasterKey) {
+    lastMasterKey = key;
+    fillStaff('f-staff-sel', 'f-staff', '対応スタッフを選ぶ'); fillStaff('f-staff2-sel', 'f-staff2', 'サブなし');
+    renderRingSlots();
+  }
   if (!$('view-list').hidden) renderList();
   if (!$('view-sum').hidden) renderSum();
 }
-function ringText(r) { return [r.ring, r.ring2].filter(Boolean).join(' / '); }
+function ringList(r) { return [r.ring, ...String(r.ring2 || '').split('、')].map(x => (x || '').trim()).filter(Boolean); }
+function ringText(r) { return ringList(r).join(' / '); }
 function staffText(r) { return [r.staff, r.staff2].filter(Boolean).join('・'); }
 
 function renderList() {
@@ -434,7 +467,7 @@ function renderSum() {
   if (!rows.length) { $('sum-tables').innerHTML = '<p class="empty">この期間の伝票はまだありません。</p>'; return; }
   $('sum-tables').innerHTML =
     sumTable('スタッフ別', group(rows, r => [r.staff, r.staff2].filter(Boolean)), 'サブで入った回も、その人の件数・時間に含めています。') +
-    sumTable('リングの種類別', group(rows, r => [...new Set([r.ring, r.ring2].filter(Boolean))].length ? [...new Set([r.ring, r.ring2].filter(Boolean))] : [''])) +
+    sumTable('リングの種類別', group(rows, r => { const u = [...new Set(ringList(r))]; return u.length ? u : ['']; })) +
     sumTable('対応人数別', group(rows, r => [r.guests + '人'])) +
     sumTable('イレギュラーの有無', group(rows, r => [r.irregular ? 'あり' : 'なし'])) +
     sumTable('イレギュラーの内容', group(rows.filter(r => (r.irrTypes||[]).length), r => r.irrTypes));
@@ -443,7 +476,7 @@ function renderSum() {
 
 $('s-csv').addEventListener('click', async () => {
   const rows = periodRows().sort((a,b) => a.date.localeCompare(b.date));
-  const head = ['接客日','対応スタッフ','サブスタッフ','リング1','リング2','対応人数','接客時間(分)','接客時間(時:分)','3時間超過','イレギュラー','イレギュラー内容','メモ'];
+  const head = ['接客日','対応スタッフ','サブスタッフ','リング1','リング2以降','対応人数','接客時間(分)','接客時間(時:分)','3時間超過','イレギュラー','イレギュラー内容','メモ'];
   const q = (v) => `"${String(v ?? '').replace(/"/g,'""')}"`;
   const csv = '﻿' + [head, ...rows.map(r => [r.date, r.staff, r.staff2, r.ring, r.ring2, r.guests, r.minutes, hm(r.minutes), r.minutes > STD_MIN ? '超過' : '', r.irregular ? 'あり' : '', (r.irrTypes||[]).join('、'), r.memo])].map(a => a.map(q).join(',')).join('\r\n');
   const a = document.createElement('a');
@@ -458,6 +491,10 @@ $('m-save').addEventListener('click', async () => {
   try { await api({ action: 'setMaster', staff: lines('m-staff'), rings: lines('m-ring') }); setStatus('選択肢を保存しました。'); }
   catch (err) { setStatus('保存できませんでした（' + (err.code || err.message) + '）。', true); }
 });
+
+/* keyboard: hide bottom tabs while typing */
+document.addEventListener('focusin', e => { if (e.target.matches('input[type=text], input[type=number], input[type=password], textarea')) document.body.classList.add('typing'); });
+document.addEventListener('focusout', () => setTimeout(() => { if (!document.activeElement || !document.activeElement.matches('input, textarea')) document.body.classList.remove('typing'); }, 50));
 
 /* boot */
 (function init() {
